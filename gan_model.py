@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import data_Processor
 import matplotlib.pyplot as plt
+import cv2
 
 
 sess = tf.Session()
@@ -75,6 +76,7 @@ def minibatch_discrimination(features):
 
 
 def building_whole_graph(input_dim,hidden_dim_generator,hidden_dim_discriminator):
+
     real_pic = tf.placeholder(tf.float32,[None,input_dim])
     real_label = tf.placeholder(tf.float32,[None,10])
     generated, x, fake_label = generator_graph(input_dim,hidden_dim_generator,10)
@@ -98,63 +100,67 @@ def building_whole_graph(input_dim,hidden_dim_generator,hidden_dim_discriminator
     optimizer2 =  tf.train.AdamOptimizer(learning_rate=5e-5).minimize(cost2,var_list=generator_variables)
     optimizer3 = tf.train.AdamOptimizer(learning_rate=5e-5).minimize(cost3, var_list=generator_variables)
     merged = tf.summary.merge_all()
-    train_writer = tf.summary.FileWriter(path, sess.graph)
     init = tf.global_variables_initializer()
-    sess.run(init)
-
     saver = tf.train.Saver()
+
+    train_writer = tf.summary.FileWriter(path, sess.graph)
+    sess.run(init)
 
     return real_pic,x,generated,cost1,cost2,cost3,optimizer1,optimizer2,optimizer3,saver,real_label,fake_label,merged,train_writer
 
 def printVarNames(varlist):
     print("VarNames:")
     for var in varlist:
-
         print(var.name)
 
 def train_models(models,batch_size,epochs,k,switch_num):
     real_pic, x, generated, cost1, cost2,cost3, optimizer1, optimizer2,optimizer3, saver,real_label_t,fake_label_t,merged,train_writer = models
-    first1 = True
-    counter_summa= 0
+
+
     for epoch in range(epochs):
-        counter = 0
-        show_pic = False
         epoch_loss1 = 0
         epoch_loss2 = 0
-        first = True
-        fig = plt.gcf()
-
-
 
         for i in range(int(train_size / batch_size)):
             real_Image, noise, real_label, noise_label = data.nextBatch(batch_size)
-            _, c1,summa = sess.run([optimizer1, cost1,merged], feed_dict={real_pic: real_Image, x: noise,real_label_t : real_label, fake_label_t : noise_label})
-            train_writer.add_summary(summa,counter_summa)
-            counter_summa +=1
+            _, c1 = sess.run([optimizer1, cost1], feed_dict={real_pic: real_Image, x: noise,real_label_t : real_label, fake_label_t : noise_label})
+
+
             epoch_loss1 += c1
 
             if i % k == 0:
-                if True:
-                    #noise = data.nextBatchNoise(batch_size)
-                    _, c2 = sess.run([optimizer2, cost2], feed_dict={real_pic: real_Image, x: noise, real_label_t : real_label, fake_label_t : noise_label})
-                    epoch_loss2 += c2
+                _, c2 = sess.run([optimizer2, cost2],feed_dict={real_pic: real_Image, x: noise, real_label_t: real_label,fake_label_t: noise_label})
+                epoch_loss2 += c2
 
 
-
+        c1, summa = sess.run([cost1, merged],feed_dict={real_pic: real_Image, x: noise, real_label_t: real_label,fake_label_t: noise_label})
+        train_writer.add_summary(summa, epoch)
 
         print("Epoche "+str(epoch)+" D-Loss: "+str(epoch_loss1)+" G-Loss: "+str(epoch_loss2/((int(train_size / batch_size)/k))))
 
+    saver.save(sess, "checkpoints/gancheck.ckpt")
+
+    return real_pic, x, generated, cost1, cost2,cost3, optimizer1, optimizer2,optimizer3, saver,real_label_t,fake_label_t,merged,train_writer
 
 
 
+def load_models(models):
+    real_pic, x, generated, cost1, cost2, cost3, optimizer1, optimizer2, optimizer3, saver, real_label_t, fake_label_t, merged, train_writer = models
+    saver.restore(sess,"checkpoints/gancheck.ckpt")
+    return real_pic, x, generated, cost1, cost2, cost3, optimizer1, optimizer2, optimizer3, saver, real_label_t, fake_label_t, merged, train_writer
 
+def generate_sample(models,number):
+    real_pic, x, generated, cost1, cost2, cost3, optimizer1, optimizer2, optimizer3, saver, real_label_t, fake_label_t, merged, train_writer = models
+    vec = np.zeros(10)
+    vec[number] = 1
+    noise = data.nextBatchNoise(1)
+    vec = vec.reshape(1,10)
+    gen_im = sess.run([generated],feed_dict={x :noise , fake_label_t : vec})
+    gen_im = gen_im[0].reshape(28,28)
+    plt.imshow(gen_im,cmap='gray')
+    plt.show()
+    return gen_im
 
-
-def load_models():
-    pass
-
-def generate_sample():
-    pass
 
 if __name__ == '__main__':
 
@@ -163,7 +169,9 @@ if __name__ == '__main__':
     data.loadData()
     train_size = data.size
     models = building_whole_graph(784,[50,40],[50,15,2])
-    train_models(models,64,500,3,40)
+    models = load_models(models)
+    models = train_models(models,64,400,8,40)
+
 
 
 

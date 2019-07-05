@@ -4,9 +4,6 @@ import data_Processor
 import matplotlib.pyplot as plt
 import cv2
 
-
-sess = tf.Session()
-
 def generator_graph(input_dim,hidden_dims,label_dim):
     x = tf.placeholder(tf.float32,[None,input_dim])
     label = tf.placeholder(tf.float32,[None,label_dim])
@@ -26,8 +23,6 @@ def generator_graph(input_dim,hidden_dims,label_dim):
         tf.summary.histogram('b1', b1)
         tf.summary.histogram('b2', b2)
         tf.summary.histogram('b3', b3)
-
-
         o1 = tf.nn.relu(tf.add(tf.matmul(input,W1),b1))
         o2 = tf.nn.relu(tf.add(tf.matmul(o1, W2), b2))
         generated = tf.add(tf.matmul(o2, W3), b3)
@@ -102,7 +97,6 @@ def building_whole_graph(input_dim,hidden_dim_generator,hidden_dim_discriminator
     merged = tf.summary.merge_all()
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
-
     train_writer = tf.summary.FileWriter(path, sess.graph)
     sess.run(init)
 
@@ -115,31 +109,21 @@ def printVarNames(varlist):
 
 def train_models(models,batch_size,epochs,k,switch_num):
     real_pic, x, generated, cost1, cost2,cost3, optimizer1, optimizer2,optimizer3, saver,real_label_t,fake_label_t,merged,train_writer = models
-
-
-    for epoch in range(epochs):
-        epoch_loss1 = 0
-        epoch_loss2 = 0
-
-        for i in range(int(train_size / batch_size)):
-            real_Image, noise, real_label, noise_label = data.nextBatch(batch_size)
-            _, c1 = sess.run([optimizer1, cost1], feed_dict={real_pic: real_Image, x: noise,real_label_t : real_label, fake_label_t : noise_label})
-
-
-            epoch_loss1 += c1
-
-            if i % k == 0:
-                _, c2 = sess.run([optimizer2, cost2],feed_dict={real_pic: real_Image, x: noise, real_label_t: real_label,fake_label_t: noise_label})
-                epoch_loss2 += c2
-
-
-        c1, summa = sess.run([cost1, merged],feed_dict={real_pic: real_Image, x: noise, real_label_t: real_label,fake_label_t: noise_label})
-        train_writer.add_summary(summa, epoch)
-
-        print("Epoche "+str(epoch)+" D-Loss: "+str(epoch_loss1)+" G-Loss: "+str(epoch_loss2/((int(train_size / batch_size)/k))))
-
-    saver.save(sess, "checkpoints/gancheck.ckpt")
-
+    with tf.Session() as sess:
+        for epoch in range(epochs):
+            epoch_loss1 = 0
+            epoch_loss2 = 0
+            for i in range(int(train_size / batch_size)):
+                real_Image, noise, real_label, noise_label = data.nextBatch(batch_size)
+                _, c1 = sess.run([optimizer1, cost1], feed_dict={real_pic: real_Image, x: noise,real_label_t : real_label, fake_label_t : noise_label})
+                epoch_loss1 += c1
+                if i % k == 0:
+                    _, c2 = sess.run([optimizer2, cost2],feed_dict={real_pic: real_Image, x: noise, real_label_t: real_label,fake_label_t: noise_label})
+                    epoch_loss2 += c2
+            c1, summa = sess.run([cost1, merged],feed_dict={real_pic: real_Image, x: noise, real_label_t: real_label,fake_label_t: noise_label})
+            train_writer.add_summary(summa, epoch)
+            print("Epoche "+str(epoch)+" D-Loss: "+str(epoch_loss1)+" G-Loss: "+str(epoch_loss2/((int(train_size / batch_size)/k))))
+        saver.save(sess, "checkpoints/gancheck.ckpt")
     return real_pic, x, generated, cost1, cost2,cost3, optimizer1, optimizer2,optimizer3, saver,real_label_t,fake_label_t,merged,train_writer
 
 
@@ -155,7 +139,8 @@ def generate_sample(models,number):
     vec[number] = 1
     noise = data.nextBatchNoise(1)
     vec = vec.reshape(1,10)
-    gen_im = sess.run([generated],feed_dict={x :noise , fake_label_t : vec})
+    with tf.Session() as sess:
+        gen_im = sess.run([generated],feed_dict={x :noise , fake_label_t : vec})
     gen_im = gen_im[0].reshape(28,28)
     plt.imshow(gen_im,cmap='gray')
     plt.show()
